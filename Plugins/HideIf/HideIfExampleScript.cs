@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -17,10 +15,10 @@ public class HideIfExampleScript : MonoBehaviour {
     [Space(10f)]
     public Object obj;
     
-    [HideIfNotNull("obj")]
+    [HideIfNull("obj", true)]
     public string objIsNull = "Shown as obj is null!";
     
-    [HideIfNull("obj")]
+    [HideIfNull("obj", false)]
     public string objIsNotNull = "Shown as obj is not null!";
     
     [Space(10f)]
@@ -53,7 +51,6 @@ public class HideIfExampleScript : MonoBehaviour {
     [HideIf("hide", true)]
     public TestDataParent c;
     public TestDataParent d;
-
 }
 
 
