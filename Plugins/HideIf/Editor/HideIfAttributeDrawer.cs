@@ -19,20 +19,23 @@ public abstract class HidingAttributeDrawer : PropertyDrawer {
 	/// </summary>
 	static Dictionary<Type, PropertyDrawer> drawerTypeToDrawerInstance;
 
-	public override void OnGUI(Rect position, SerializedProperty property, GUIContent label) {
-		if (ShouldDraw(property)) {
-			if (typeToDrawerType == null)
-				PopulateTypeToDrawer();
+	static readonly FieldInfo m_FieldInfo = typeof(PropertyDrawer).GetField("m_FieldInfo", BindingFlags.NonPublic | BindingFlags.Instance);
+	static readonly FieldInfo m_Attribute = typeof(PropertyDrawer).GetField("m_Attribute", BindingFlags.NonPublic | BindingFlags.Instance);
+	static readonly FieldInfo targetType = typeof(CustomPropertyDrawer).GetField("m_Type", BindingFlags.Instance | BindingFlags.NonPublic);
+	static readonly FieldInfo useForChildren = typeof(CustomPropertyDrawer).GetField("m_UseForChildren", BindingFlags.Instance | BindingFlags.NonPublic);
+	static readonly Type propertyDrawerType = typeof(PropertyDrawer);
+	static readonly Type[] types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes()).Where(type => propertyDrawerType.IsAssignableFrom(type)).ToArray();
 
-			Type drawerType;
-			var typeOfProp = Utilities.GetTargetObjectOfProperty(property).GetType();
-			if (typeToDrawerType.TryGetValue(typeOfProp, out drawerType)) {
-				var drawer = drawerTypeToDrawerInstance.GetOrAdd(drawerType, () => CreateDrawerInstance(drawerType));
-				drawer.OnGUI(position, property, label);
-			}
-			else {
-				EditorGUI.PropertyField(position, property, label, true);
-			}
+	public override void OnGUI(Rect position, SerializedProperty property, GUIContent label) {
+		if (!ShouldDraw(property)) return;
+
+		var drawer = GetDrawer(property);
+
+		if (drawer != null) {
+			drawer.OnGUI(position, property, label);
+		}
+		else {
+			EditorGUI.PropertyField(position, property, label, true);
 		}
 	}
 
@@ -42,16 +45,53 @@ public abstract class HidingAttributeDrawer : PropertyDrawer {
 		if (!ShouldDraw(property))
 			return -2;
 
+		var drawer = GetDrawer(property);
+
+		if (drawer != null) {
+			return drawer.GetPropertyHeight(property, label);
+		}
+		return EditorGUI.GetPropertyHeight(property, label, true);
+	}
+
+	PropertyDrawer GetDrawer(SerializedProperty property) {
 		if (typeToDrawerType == null)
 			PopulateTypeToDrawer();
 
 		Type drawerType;
+
+		var customPropertyAttr = fieldInfo.GetCustomAttributes(typeof(PropertyAttribute), true).ToArray();
+		int attIndexOf = Array.IndexOf(customPropertyAttr, attribute);
+		for (int i = attIndexOf + 1; i < customPropertyAttr.Length; i++) {
+			var att = customPropertyAttr[i];
+
+			if (typeToDrawerType.TryGetValue(att.GetType(), out drawerType)) {
+				var drawer = drawerTypeToDrawerInstance.GetOrAdd(drawerType, () => CreateDrawerInstance(drawerType));
+				var obj = GetHoldingObject(property);
+				m_FieldInfo.SetValue(drawer, fieldInfo);
+				m_Attribute.SetValue(drawer, att);
+				return drawer;
+			}
+			var targetedType = (Type) targetType.GetValue(att);
+
+			/*
+			// Idk what to do about this
+			var useThisForChildren = (bool) useForChildren.GetValue(propertyDrawer);
+			if (useThisForChildren) {
+				var childTypes = types.Where(t => targetedType.IsAssignableFrom(t) && t != targetedType);
+				foreach (var childType in childTypes) {
+					typeToDrawerType[childType] = member;
+				}
+			}
+			*/
+		}
+
 		var typeOfProp = Utilities.GetTargetObjectOfProperty(property).GetType();
 		if (typeToDrawerType.TryGetValue(typeOfProp, out drawerType)) {
 			var drawer = drawerTypeToDrawerInstance.GetOrAdd(drawerType, () => CreateDrawerInstance(drawerType));
-			return drawer.GetPropertyHeight(property, label);
+			return drawer;
 		}
-		return EditorGUI.GetPropertyHeight(property, label, true);
+
+		return null;
 	}
 
 	private PropertyDrawer CreateDrawerInstance(Type drawerType) {
@@ -61,25 +101,18 @@ public abstract class HidingAttributeDrawer : PropertyDrawer {
 	private void PopulateTypeToDrawer() {
 		typeToDrawerType = new Dictionary<Type, Type>();
 		drawerTypeToDrawerInstance = new Dictionary<Type, PropertyDrawer>();
-		var propertyDrawerType = typeof(PropertyDrawer);
-		var targetType = typeof(CustomPropertyDrawer).GetField("m_Type", BindingFlags.Instance | BindingFlags.NonPublic);
-		var useForChildren = typeof(CustomPropertyDrawer).GetField("m_UseForChildren", BindingFlags.Instance | BindingFlags.NonPublic);
-
-		var types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes());
 
 		foreach (Type type in types) {
-			if (propertyDrawerType.IsAssignableFrom(type)) {
-				var customPropertyDrawers = type.GetCustomAttributes(true).OfType<CustomPropertyDrawer>().ToList();
-				foreach (var propertyDrawer in customPropertyDrawers) {
-					var targetedType = (Type) targetType.GetValue(propertyDrawer);
-					typeToDrawerType[targetedType] = type;
+			var customPropertyDrawers = type.GetCustomAttributes(true).OfType<CustomPropertyDrawer>().ToArray();
+			foreach (var propertyDrawer in customPropertyDrawers) {
+				var targetedType = (Type) targetType.GetValue(propertyDrawer);
+				typeToDrawerType[targetedType] = type;
 
-					var useThisForChildren = (bool) useForChildren.GetValue(propertyDrawer);
-					if (useThisForChildren) {
-						var childTypes = types.Where(t => targetedType.IsAssignableFrom(t) && t != targetedType);
-						foreach (var childType in childTypes) {
-							typeToDrawerType[childType] = type;
-						}
+				var useThisForChildren = (bool) useForChildren.GetValue(propertyDrawer);
+				if (useThisForChildren) {
+					var childTypes = types.Where(t => targetedType.IsAssignableFrom(t) && t != targetedType);
+					foreach (var childType in childTypes) {
+						typeToDrawerType[childType] = type;
 					}
 				}
 			}
