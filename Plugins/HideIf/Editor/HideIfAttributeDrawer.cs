@@ -128,6 +128,7 @@ public abstract class HidingAttributeDrawer : PropertyDrawer {
 	}
 	protected static object GetHoldingObject(SerializedProperty property) {
 		var path = GetParentPathProperty(property);
+		if (path[path.Length - 1] == '.') path = path.Substring(0, path.Length - 1);
 		if (string.IsNullOrEmpty(path)) return property.serializedObject.targetObject;
 		else return Utilities.GetTargetObjectOfProperty(property.serializedObject.FindProperty(path));
 	}
