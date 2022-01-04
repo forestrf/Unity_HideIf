@@ -71,10 +71,10 @@ public abstract class HidingAttributeDrawer : PropertyDrawer {
 				m_Attribute.SetValue(drawer, att);
 				return drawer;
 			}
-			var targetedType = (Type) targetType.GetValue(att);
 
 			/*
 			// Idk what to do about this
+			//var targetedType = (Type) targetType.GetValue(att);
 			var useThisForChildren = (bool) useForChildren.GetValue(propertyDrawer);
 			if (useThisForChildren) {
 				var childTypes = types.Where(t => targetedType.IsAssignableFrom(t) && t != targetedType);
